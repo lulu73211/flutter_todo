@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import 'firebase_options.dart';
+import 'auth/auth.dart';
 import 'login_page.dart';
 import 'todo_page.dart';
 
@@ -22,18 +23,18 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Todo App',
       theme: ThemeData(primarySwatch: Colors.blue),
-      home: const AuthGate(),
+      home: AuthGate(),
     );
   }
 }
 
 class AuthGate extends StatelessWidget {
-  const AuthGate({super.key});
-
+  AuthGate({super.key});
+  final auth = Auth();
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
+      stream: auth.authState,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());

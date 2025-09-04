@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'auth/auth.dart';
 
 class TodoPage extends StatefulWidget {
   const TodoPage({super.key});
@@ -40,14 +41,15 @@ class _TodoPageState extends State<TodoPage> {
 
   @override
   Widget build(BuildContext context) {
-    final userId = FirebaseAuth.instance.currentUser!.uid;
+    final auth = Auth();
+    final userId = auth.currentUser!.uid;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text("My Todos"),
         actions: [
           IconButton(
-            onPressed: () async => await FirebaseAuth.instance.signOut(),
+            onPressed: () async => await auth.signOut(),
             icon: const Icon(Icons.logout),
             tooltip: "Déconnexion",
           ),
@@ -95,7 +97,8 @@ class _TodoPageState extends State<TodoPage> {
                 final docs = snapshot.data!.docs;
 
                 if (docs.isEmpty) {
-                  return const Center(child: Text("Aucune tâche pour l’instant"));
+                  return const Center(
+                      child: Text("Aucune tâche pour l’instant"));
                 }
 
                 return ListView(
@@ -105,9 +108,8 @@ class _TodoPageState extends State<TodoPage> {
                       title: Text(
                         data['text'] ?? '',
                         style: TextStyle(
-                          decoration: data['done']
-                              ? TextDecoration.lineThrough
-                              : null,
+                          decoration:
+                              data['done'] ? TextDecoration.lineThrough : null,
                         ),
                       ),
                       leading: Checkbox(
