@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import 'auth/auth.dart';
+
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
@@ -12,12 +14,11 @@ class _LoginPageState extends State<LoginPage> {
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
 
+  final auth = Auth();
+
   Future<void> _login() async {
     try {
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: emailController.text.trim(),
-        password: passwordController.text.trim(),
-      );
+      await auth.login(emailController.text, passwordController.text);
     } catch (e) {
       _showError(e.toString());
     }
@@ -25,10 +26,7 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> _register() async {
     try {
-      await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: emailController.text.trim(),
-        password: passwordController.text.trim(),
-      );
+      await auth.register(emailController.text, passwordController.text);
     } catch (e) {
       _showError(e.toString());
     }
@@ -58,8 +56,10 @@ class _LoginPageState extends State<LoginPage> {
               decoration: const InputDecoration(labelText: "Mot de passe"),
             ),
             const SizedBox(height: 20),
-            ElevatedButton(onPressed: _login, child: const Text("Se connecter")),
-            ElevatedButton(onPressed: _register, child: const Text("Créer un compte")),
+            ElevatedButton(
+                onPressed: _login, child: const Text("Se connecter")),
+            ElevatedButton(
+                onPressed: _register, child: const Text("Créer un compte")),
           ],
         ),
       ),
