@@ -14,13 +14,24 @@ class _TodoPageState extends State<TodoPage> {
   final TextEditingController _controller = TextEditingController();
 
   /// Ajout d'une tâche dans Firestore
-  void _addTodo() {
-    if (_controller.text.isNotEmpty) {
+  void _addTodo() async {
+    if (_controller.text.isEmpty) return;
+
+    // Ouvre un sélecteur de date
+    final DateTime? selectedDate = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+
+    if (selectedDate != null) {
       FirebaseFirestore.instance.collection('todos').add({
         'text': _controller.text.trim(),
         'done': false,
         'userId': FirebaseAuth.instance.currentUser!.uid,
         'createdAt': FieldValue.serverTimestamp(),
+        'dueDate': Timestamp.fromDate(selectedDate),
       });
       _controller.clear();
     }
@@ -84,7 +95,7 @@ class _TodoPageState extends State<TodoPage> {
               stream: FirebaseFirestore.instance
                   .collection('todos')
                   .where('userId', isEqualTo: userId)
-                  .orderBy('createdAt', descending: true)
+                  .orderBy('dueDate', descending: false)
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
@@ -104,18 +115,38 @@ class _TodoPageState extends State<TodoPage> {
                 return ListView(
                   children: docs.map((doc) {
                     final data = doc.data() as Map<String, dynamic>;
+
+                    final bool done = data['done'] ?? false;
+                    final Timestamp? dueTimestamp = data['dueDate'];
+                    DateTime? dueDate = dueTimestamp?.toDate();
+
+                    // Vérifie si la tâche est en retard
+                    final bool isOverdue = dueDate != null &&
+                        dueDate.isBefore(DateTime.now()) &&
+                        !done;
+
                     return ListTile(
                       title: Text(
                         data['text'] ?? '',
                         style: TextStyle(
-                          decoration:
-                              data['done'] ? TextDecoration.lineThrough : null,
+                          color: isOverdue
+                              ? Colors.red
+                              : null, // 🔴 texte rouge si en retard
+                          decoration: done ? TextDecoration.lineThrough : null,
                         ),
                       ),
+                      subtitle: dueDate != null
+                          ? Text(
+                              "Échéance : ${dueDate.day}/${dueDate.month}/${dueDate.year}",
+                              style: TextStyle(
+                                color:
+                                    isOverdue ? Colors.red : Colors.grey[600],
+                              ),
+                            )
+                          : null,
                       leading: Checkbox(
-                        value: data['done'] ?? false,
-                        onChanged: (_) =>
-                            _toggleDone(doc.id, data['done'] ?? false),
+                        value: done,
+                        onChanged: (_) => _toggleDone(doc.id, done),
                       ),
                       trailing: IconButton(
                         icon: const Icon(Icons.delete, color: Colors.red),
