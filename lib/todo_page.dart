@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'auth/auth.dart';
 
 class TodoPage extends StatefulWidget {
@@ -26,34 +27,108 @@ class _TodoPageState extends State<TodoPage> {
     );
 
     if (selectedDate != null) {
-      FirebaseFirestore.instance.collection('todos').add({
-        'text': _controller.text.trim(),
-        'done': false,
-        'userId': FirebaseAuth.instance.currentUser!.uid,
-        'createdAt': FieldValue.serverTimestamp(),
-        'dueDate': Timestamp.fromDate(selectedDate),
-      });
-      _controller.clear();
+      try {
+        if (kDebugMode) {
+          print('Tentative d\'ajout de tâche: ${_controller.text.trim()}');
+        }
+
+        await FirebaseFirestore.instance.collection('todos').add({
+          'text': _controller.text.trim(),
+          'done': false,
+          'userId': FirebaseAuth.instance.currentUser!.uid,
+          'createdAt': FieldValue.serverTimestamp(),
+          'dueDate': Timestamp.fromDate(selectedDate),
+        });
+
+        _controller.clear();
+
+        if (kDebugMode) {
+          print('Tâche ajoutée avec succès');
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          print('Erreur lors de l\'ajout de la tâche: $e');
+        }
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Erreur lors de l\'ajout: ${e.toString()}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
     }
   }
 
   /// Bascule l'état "fait" / "non fait"
-  void _toggleDone(String id, bool current) {
-    FirebaseFirestore.instance
-        .collection('todos')
-        .doc(id)
-        .update({'done': !current});
+  void _toggleDone(String id, bool current) async {
+    try {
+      if (kDebugMode) {
+        print('Mise à jour de la tâche $id: ${!current}');
+      }
+
+      await FirebaseFirestore.instance
+          .collection('todos')
+          .doc(id)
+          .update({'done': !current});
+    } catch (e) {
+      if (kDebugMode) {
+        print('Erreur lors de la mise à jour: $e');
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur lors de la mise à jour: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   /// Supprime une tâche
-  void _delete(String id) {
-    FirebaseFirestore.instance.collection('todos').doc(id).delete();
+  void _delete(String id) async {
+    try {
+      if (kDebugMode) {
+        print('Suppression de la tâche $id');
+      }
+
+      await FirebaseFirestore.instance.collection('todos').doc(id).delete();
+    } catch (e) {
+      if (kDebugMode) {
+        print('Erreur lors de la suppression: $e');
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur lors de la suppression: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final auth = Auth();
-    final userId = auth.currentUser!.uid;
+    final userId = auth.currentUser?.uid;
+
+    if (userId == null) {
+      return const Scaffold(
+        body: Center(
+          child: Text('Erreur: Utilisateur non connecté'),
+        ),
+      );
+    }
+
+    if (kDebugMode) {
+      print('Todo page chargée pour l\'utilisateur: $userId');
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -98,9 +173,62 @@ class _TodoPageState extends State<TodoPage> {
                   .orderBy('dueDate', descending: false)
                   .snapshots(),
               builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return const Center(child: Text("Erreur de chargement"));
+                if (kDebugMode) {
+                  print('StreamBuilder state: ${snapshot.connectionState}');
+                  print('StreamBuilder hasData: ${snapshot.hasData}');
+                  print('StreamBuilder hasError: ${snapshot.hasError}');
+                  if (snapshot.hasError) {
+                    print('StreamBuilder error: ${snapshot.error}');
+                  }
                 }
+
+                if (snapshot.hasError) {
+                  if (kDebugMode) {
+                    print('Erreur Firestore détaillée: ${snapshot.error}');
+                  }
+
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.error, color: Colors.red, size: 48),
+                        const SizedBox(height: 16),
+                        const Text(
+                          "Erreur de chargement",
+                          style: TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          snapshot.error.toString(),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Colors.grey),
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: () {
+                            setState(() {});
+                          },
+                          child: const Text('Réessayer'),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 16),
+                        Text('Chargement des tâches...'),
+                      ],
+                    ),
+                  );
+                }
+
                 if (!snapshot.hasData) {
                   return const Center(child: CircularProgressIndicator());
                 }
