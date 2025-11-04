@@ -78,8 +78,7 @@ class _LoginPageState extends State<LoginPage> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   // Logo / Titre
-                  Icon(Icons.check_circle_rounded,
-                      size: 64, color: cs.primary),
+                  Icon(Icons.check_circle_rounded, size: 64, color: cs.primary),
                   const SizedBox(height: 12),
                   Text(
                     'Bienvenue 👋',
@@ -109,7 +108,12 @@ class _LoginPageState extends State<LoginPage> {
                             TextFormField(
                               controller: emailController,
                               keyboardType: TextInputType.emailAddress,
-                              autofillHints: const [AutofillHints.username, AutofillHints.email],
+                              autofillHints: const [
+                                AutofillHints.username,
+                                AutofillHints.email
+                              ],
+                              textInputAction: TextInputAction
+                                  .next, // 👈 Tab/Enter -> champ suivant
                               decoration: const InputDecoration(
                                 labelText: 'Email',
                                 hintText: 'ex: lucas@mail.com',
@@ -119,7 +123,8 @@ class _LoginPageState extends State<LoginPage> {
                                 if (v == null || v.trim().isEmpty) {
                                   return 'Email obligatoire';
                                 }
-                                final ok = RegExp(r'^\S+@\S+\.\S+$').hasMatch(v.trim());
+                                final ok = RegExp(r'^\S+@\S+\.\S+$')
+                                    .hasMatch(v.trim());
                                 if (!ok) return 'Email invalide';
                                 return null;
                               },
@@ -129,6 +134,11 @@ class _LoginPageState extends State<LoginPage> {
                               controller: passwordController,
                               obscureText: _obscure,
                               autofillHints: const [AutofillHints.password],
+                              textInputAction: TextInputAction
+                                  .done, // 👈 bouton "Done"/Enter
+                              onFieldSubmitted: (_) {
+                                if (!_loading) _login(); // 👈 Enter = connexion
+                              },
                               decoration: InputDecoration(
                                 labelText: 'Mot de passe',
                                 prefixIcon: const Icon(Icons.lock_rounded),
@@ -136,8 +146,9 @@ class _LoginPageState extends State<LoginPage> {
                                   tooltip: _obscure ? 'Afficher' : 'Masquer',
                                   onPressed: () =>
                                       setState(() => _obscure = !_obscure),
-                                  icon: Icon(
-                                      _obscure ? Icons.visibility : Icons.visibility_off),
+                                  icon: Icon(_obscure
+                                      ? Icons.visibility
+                                      : Icons.visibility_off),
                                 ),
                               ),
                               validator: (v) {
@@ -161,7 +172,8 @@ class _LoginPageState extends State<LoginPage> {
                                     ? const SizedBox(
                                         width: 16,
                                         height: 16,
-                                        child: CircularProgressIndicator(strokeWidth: 2),
+                                        child: CircularProgressIndicator(
+                                            strokeWidth: 2),
                                       )
                                     : const Icon(Icons.login_rounded),
                                 label: const Text('Se connecter'),
@@ -172,7 +184,8 @@ class _LoginPageState extends State<LoginPage> {
                               width: double.infinity,
                               child: ElevatedButton.icon(
                                 onPressed: _loading ? null : _register,
-                                icon: const Icon(Icons.person_add_alt_1_rounded),
+                                icon:
+                                    const Icon(Icons.person_add_alt_1_rounded),
                                 label: const Text('Créer un compte'),
                               ),
                             ),
