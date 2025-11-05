@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart';
 import 'auth/auth.dart';
 
 class TodoPage extends StatefulWidget {
@@ -13,6 +12,9 @@ class TodoPage extends StatefulWidget {
 
 class _TodoPageState extends State<TodoPage> {
   final TextEditingController _controller = TextEditingController();
+
+  // priorité sélectionnée dans le formulaire
+  String _selectedPriority = 'medium'; // low | medium | high
 
   /// Ajout d'une tâche dans Firestore
   void _addTodo() async {
@@ -27,108 +29,36 @@ class _TodoPageState extends State<TodoPage> {
     );
 
     if (selectedDate != null) {
-      try {
-        if (kDebugMode) {
-          print('Tentative d\'ajout de tâche: ${_controller.text.trim()}');
-        }
-
-        await FirebaseFirestore.instance.collection('todos').add({
-          'text': _controller.text.trim(),
-          'done': false,
-          'userId': FirebaseAuth.instance.currentUser!.uid,
-          'createdAt': FieldValue.serverTimestamp(),
-          'dueDate': Timestamp.fromDate(selectedDate),
-        });
-
-        _controller.clear();
-
-        if (kDebugMode) {
-          print('Tâche ajoutée avec succès');
-        }
-      } catch (e) {
-        if (kDebugMode) {
-          print('Erreur lors de l\'ajout de la tâche: $e');
-        }
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Erreur lors de l\'ajout: ${e.toString()}'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
+      FirebaseFirestore.instance.collection('todos').add({
+        'text': _controller.text.trim(),
+        'done': false,
+        'userId': FirebaseAuth.instance.currentUser!.uid,
+        'createdAt': FieldValue.serverTimestamp(),
+        'dueDate': Timestamp.fromDate(selectedDate),
+        'priority': _selectedPriority, // ✅ on stocke la priorité
+      });
+      _controller.clear();
+      // on garde la priorité précédente, mais tu peux la remettre à "medium" si tu veux
     }
   }
 
   /// Bascule l'état "fait" / "non fait"
-  void _toggleDone(String id, bool current) async {
-    try {
-      if (kDebugMode) {
-        print('Mise à jour de la tâche $id: ${!current}');
-      }
-
-      await FirebaseFirestore.instance
-          .collection('todos')
-          .doc(id)
-          .update({'done': !current});
-    } catch (e) {
-      if (kDebugMode) {
-        print('Erreur lors de la mise à jour: $e');
-      }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erreur lors de la mise à jour: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
+  void _toggleDone(String id, bool current) {
+    FirebaseFirestore.instance
+        .collection('todos')
+        .doc(id)
+        .update({'done': !current});
   }
 
   /// Supprime une tâche
-  void _delete(String id) async {
-    try {
-      if (kDebugMode) {
-        print('Suppression de la tâche $id');
-      }
-
-      await FirebaseFirestore.instance.collection('todos').doc(id).delete();
-    } catch (e) {
-      if (kDebugMode) {
-        print('Erreur lors de la suppression: $e');
-      }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erreur lors de la suppression: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
+  void _delete(String id) {
+    FirebaseFirestore.instance.collection('todos').doc(id).delete();
   }
 
   @override
   Widget build(BuildContext context) {
     final auth = Auth();
-    final userId = auth.currentUser?.uid;
-
-    if (userId == null) {
-      return const Scaffold(
-        body: Center(
-          child: Text('Erreur: Utilisateur non connecté'),
-        ),
-      );
-    }
-
-    if (kDebugMode) {
-      print('Todo page chargée pour l\'utilisateur: $userId');
-    }
+    final userId = auth.currentUser!.uid;
 
     return Scaffold(
       appBar: AppBar(
@@ -143,7 +73,7 @@ class _TodoPageState extends State<TodoPage> {
       ),
       body: Column(
         children: [
-          // Champ de saisie + bouton "ajouter"
+          // Champ de saisie + priorité + bouton "ajouter"
           Padding(
             padding: const EdgeInsets.all(8),
             child: Row(
@@ -154,7 +84,34 @@ class _TodoPageState extends State<TodoPage> {
                     decoration: const InputDecoration(
                       labelText: "Nouvelle tâche",
                     ),
+                    onSubmitted: (_) => _addTodo(),
                   ),
+                ),
+                const SizedBox(width: 8),
+                // Sélecteur de priorité
+                DropdownButton<String>(
+                  value: _selectedPriority,
+                  underline: const SizedBox(),
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'low',
+                      child: Text('Basse'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'medium',
+                      child: Text('Moyenne'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'high',
+                      child: Text('Haute'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setState(() {
+                      _selectedPriority = value;
+                    });
+                  },
                 ),
                 IconButton(
                   icon: const Icon(Icons.add),
@@ -173,62 +130,11 @@ class _TodoPageState extends State<TodoPage> {
                   .orderBy('dueDate', descending: false)
                   .snapshots(),
               builder: (context, snapshot) {
-                if (kDebugMode) {
-                  print('StreamBuilder state: ${snapshot.connectionState}');
-                  print('StreamBuilder hasData: ${snapshot.hasData}');
-                  print('StreamBuilder hasError: ${snapshot.hasError}');
-                  if (snapshot.hasError) {
-                    print('StreamBuilder error: ${snapshot.error}');
-                  }
-                }
-
                 if (snapshot.hasError) {
-                  if (kDebugMode) {
-                    print('Erreur Firestore détaillée: ${snapshot.error}');
-                  }
-
                   return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.error, color: Colors.red, size: 48),
-                        const SizedBox(height: 16),
-                        const Text(
-                          "Erreur de chargement",
-                          style: TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          snapshot.error.toString(),
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(color: Colors.grey),
-                        ),
-                        const SizedBox(height: 16),
-                        ElevatedButton(
-                          onPressed: () {
-                            setState(() {});
-                          },
-                          child: const Text('Réessayer'),
-                        ),
-                      ],
-                    ),
+                    child: Text("Erreur de chargement : ${snapshot.error}"),
                   );
                 }
-
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        CircularProgressIndicator(),
-                        SizedBox(height: 16),
-                        Text('Chargement des tâches...'),
-                      ],
-                    ),
-                  );
-                }
-
                 if (!snapshot.hasData) {
                   return const Center(child: CircularProgressIndicator());
                 }
@@ -248,6 +154,28 @@ class _TodoPageState extends State<TodoPage> {
                     final Timestamp? dueTimestamp = data['dueDate'];
                     DateTime? dueDate = dueTimestamp?.toDate();
 
+                    final String priorityRaw =
+                        (data['priority'] ?? 'medium') as String;
+
+                    // mapping priorité -> label + couleur
+                    String priorityLabel;
+                    Color priorityColor;
+                    switch (priorityRaw) {
+                      case 'low':
+                        priorityLabel = 'Basse';
+                        priorityColor = Colors.green;
+                        break;
+                      case 'high':
+                        priorityLabel = 'Haute';
+                        priorityColor = Colors.red;
+                        break;
+                      case 'medium':
+                      default:
+                        priorityLabel = 'Moyenne';
+                        priorityColor = Colors.orange;
+                        break;
+                    }
+
                     // Vérifie si la tâche est en retard
                     final bool isOverdue = dueDate != null &&
                         dueDate.isBefore(DateTime.now()) &&
@@ -257,21 +185,27 @@ class _TodoPageState extends State<TodoPage> {
                       title: Text(
                         data['text'] ?? '',
                         style: TextStyle(
-                          color: isOverdue
-                              ? Colors.red
-                              : null, // 🔴 texte rouge si en retard
+                          color: isOverdue ? Colors.red : null,
                           decoration: done ? TextDecoration.lineThrough : null,
                         ),
                       ),
-                      subtitle: dueDate != null
-                          ? Text(
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (dueDate != null)
+                            Text(
                               "Échéance : ${dueDate.day}/${dueDate.month}/${dueDate.year}",
                               style: TextStyle(
                                 color:
                                     isOverdue ? Colors.red : Colors.grey[600],
                               ),
-                            )
-                          : null,
+                            ),
+                          Text(
+                            "Priorité : $priorityLabel",
+                            style: TextStyle(color: priorityColor),
+                          ),
+                        ],
+                      ),
                       leading: Checkbox(
                         value: done,
                         onChanged: (_) => _toggleDone(doc.id, done),
