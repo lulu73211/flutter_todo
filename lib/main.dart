@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'firebase_options.dart';
 import 'auth/auth.dart';
@@ -26,16 +27,24 @@ class MyApp extends StatelessWidget {
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       themeMode: ThemeMode.system,
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('fr'),
+      ],
+      locale: const Locale('fr'),
       home: AuthGate(),
     );
   }
 }
 
 class AuthGate extends StatelessWidget {
-  AuthGate({super.key}); 
-  
-  final auth = Auth();
+  AuthGate({super.key});
 
+  final auth = Auth();
 
   @override
   Widget build(BuildContext context) {
@@ -55,4 +64,3 @@ class AuthGate extends StatelessWidget {
     );
   }
 }
-
