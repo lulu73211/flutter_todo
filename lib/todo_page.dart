@@ -12,15 +12,13 @@ class TodoPage extends StatefulWidget {
 
 class _TodoPageState extends State<TodoPage> {
   final TextEditingController _controller = TextEditingController();
-
-  // priorité sélectionnée dans le formulaire
   String _selectedPriority = 'medium'; // low | medium | high
 
   /// Ajout d'une tâche dans Firestore
-  void _addTodo() async {
+  Future<void> _addTodo() async {
     if (_controller.text.isEmpty) return;
 
-    // Ouvre un sélecteur de date
+    // Sélecteur de date d’échéance
     final DateTime? selectedDate = await showDatePicker(
       context: context,
       initialDate: DateTime.now(),
@@ -29,99 +27,104 @@ class _TodoPageState extends State<TodoPage> {
     );
 
     if (selectedDate != null) {
-      FirebaseFirestore.instance.collection('todos').add({
+      await FirebaseFirestore.instance.collection('todos').add({
         'text': _controller.text.trim(),
         'done': false,
         'userId': FirebaseAuth.instance.currentUser!.uid,
         'createdAt': FieldValue.serverTimestamp(),
         'dueDate': Timestamp.fromDate(selectedDate),
-        'priority': _selectedPriority, // ✅ on stocke la priorité
+        'priority': _selectedPriority,
       });
       _controller.clear();
-      // on garde la priorité précédente, mais tu peux la remettre à "medium" si tu veux
     }
   }
 
   /// Bascule l'état "fait" / "non fait"
-  void _toggleDone(String id, bool current) {
-    FirebaseFirestore.instance
+  Future<void> _toggleDone(String id, bool current) async {
+    await FirebaseFirestore.instance
         .collection('todos')
         .doc(id)
         .update({'done': !current});
   }
 
   /// Supprime une tâche
-  void _delete(String id) {
-    FirebaseFirestore.instance.collection('todos').doc(id).delete();
+  Future<void> _delete(String id) async {
+    await FirebaseFirestore.instance.collection('todos').doc(id).delete();
   }
 
   @override
   Widget build(BuildContext context) {
     final auth = Auth();
     final userId = auth.currentUser!.uid;
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("My Todos"),
+        title: const Text('My Todos'),
         actions: [
           IconButton(
             onPressed: () async => await auth.signOut(),
             icon: const Icon(Icons.logout),
-            tooltip: "Déconnexion",
+            tooltip: 'Déconnexion',
           ),
         ],
       ),
       body: Column(
         children: [
-          // Champ de saisie + priorité + bouton "ajouter"
+          // --------- Bloc d’ajout ---------
           Padding(
-            padding: const EdgeInsets.all(8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _controller,
-                    decoration: const InputDecoration(
-                      labelText: "Nouvelle tâche",
+            padding: const EdgeInsets.all(12),
+            child: Card(
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _controller,
+                        decoration: const InputDecoration(
+                          labelText: 'Nouvelle tâche',
+                          hintText: 'Ex : Acheter du pain',
+                        ),
+                        onSubmitted: (_) => _addTodo(),
+                      ),
                     ),
-                    onSubmitted: (_) => _addTodo(),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                // Sélecteur de priorité
-                DropdownButton<String>(
-                  value: _selectedPriority,
-                  underline: const SizedBox(),
-                  items: const [
-                    DropdownMenuItem(
-                      value: 'low',
-                      child: Text('Basse'),
+                    const SizedBox(width: 8),
+                    DropdownButton<String>(
+                      value: _selectedPriority,
+                      underline: const SizedBox.shrink(),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'low',
+                          child: Text('Basse'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'medium',
+                          child: Text('Moyenne'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'high',
+                          child: Text('Haute'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setState(() => _selectedPriority = value);
+                      },
                     ),
-                    DropdownMenuItem(
-                      value: 'medium',
-                      child: Text('Moyenne'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'high',
-                      child: Text('Haute'),
+                    IconButton(
+                      icon: const Icon(Icons.add),
+                      onPressed: _addTodo,
                     ),
                   ],
-                  onChanged: (value) {
-                    if (value == null) return;
-                    setState(() {
-                      _selectedPriority = value;
-                    });
-                  },
                 ),
-                IconButton(
-                  icon: const Icon(Icons.add),
-                  onPressed: _addTodo,
-                ),
-              ],
+              ),
             ),
           ),
 
-          // Liste des todos de l'utilisateur
+          // --------- Liste des tâches ---------
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
@@ -132,7 +135,7 @@ class _TodoPageState extends State<TodoPage> {
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
                   return Center(
-                    child: Text("Erreur de chargement : ${snapshot.error}"),
+                    child: Text('Erreur de chargement : ${snapshot.error}'),
                   );
                 }
                 if (!snapshot.hasData) {
@@ -140,19 +143,24 @@ class _TodoPageState extends State<TodoPage> {
                 }
 
                 final docs = snapshot.data!.docs;
-
                 if (docs.isEmpty) {
                   return const Center(
-                      child: Text("Aucune tâche pour l’instant"));
+                    child: Text('Aucune tâche pour l’instant'),
+                  );
                 }
 
-                return ListView(
-                  children: docs.map((doc) {
+                return ListView.separated(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  itemCount: docs.length,
+                  itemBuilder: (context, index) {
+                    final doc = docs[index];
                     final data = doc.data() as Map<String, dynamic>;
 
                     final bool done = data['done'] ?? false;
                     final Timestamp? dueTimestamp = data['dueDate'];
-                    DateTime? dueDate = dueTimestamp?.toDate();
+                    final DateTime? dueDate = dueTimestamp?.toDate();
 
                     final String priorityRaw =
                         (data['priority'] ?? 'medium') as String;
@@ -163,59 +171,116 @@ class _TodoPageState extends State<TodoPage> {
                     switch (priorityRaw) {
                       case 'low':
                         priorityLabel = 'Basse';
-                        priorityColor = Colors.green;
+                        priorityColor = Colors.green.shade400;
                         break;
                       case 'high':
                         priorityLabel = 'Haute';
-                        priorityColor = Colors.red;
+                        priorityColor = cs.error;
                         break;
                       case 'medium':
                       default:
                         priorityLabel = 'Moyenne';
-                        priorityColor = Colors.orange;
+                        priorityColor = Colors.orange.shade400;
                         break;
                     }
 
-                    // Vérifie si la tâche est en retard
+                    // Tâche en retard ?
                     final bool isOverdue = dueDate != null &&
                         dueDate.isBefore(DateTime.now()) &&
                         !done;
 
-                    return ListTile(
-                      title: Text(
-                        data['text'] ?? '',
-                        style: TextStyle(
-                          color: isOverdue ? Colors.red : null,
-                          decoration: done ? TextDecoration.lineThrough : null,
-                        ),
-                      ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (dueDate != null)
-                            Text(
-                              "Échéance : ${dueDate.day}/${dueDate.month}/${dueDate.year}",
-                              style: TextStyle(
-                                color:
-                                    isOverdue ? Colors.red : Colors.grey[600],
+                    return Card(
+                      elevation: 1,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 8),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Checkbox
+                            Checkbox(
+                              value: done,
+                              onChanged: (_) => _toggleDone(doc.id, done),
+                            ),
+                            const SizedBox(width: 4),
+
+                            // Contenu
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          data['text'] ?? '',
+                                          style: tt.titleMedium?.copyWith(
+                                            color: isOverdue
+                                                ? cs.error
+                                                : cs.onSurface,
+                                            decoration: done
+                                                ? TextDecoration.lineThrough
+                                                : null,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                      if (isOverdue)
+                                        Icon(
+                                          Icons.warning_amber_rounded,
+                                          size: 18,
+                                          color: cs.error,
+                                        ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 4,
+                                    children: [
+                                      if (dueDate != null)
+                                        Chip(
+                                          visualDensity: VisualDensity.compact,
+                                          backgroundColor: isOverdue
+                                              ? cs.errorContainer
+                                              : cs.surfaceVariant,
+                                          label: Text(
+                                            'Échéance : ${dueDate.day}/${dueDate.month}/${dueDate.year}',
+                                          ),
+                                          labelStyle: tt.bodySmall?.copyWith(
+                                            color: isOverdue
+                                                ? cs.onErrorContainer
+                                                : cs.onSurfaceVariant,
+                                          ),
+                                        ),
+                                      Chip(
+                                        visualDensity: VisualDensity.compact,
+                                        backgroundColor:
+                                            priorityColor.withOpacity(0.15),
+                                        label:
+                                            Text('Priorité : $priorityLabel'),
+                                        labelStyle: tt.bodySmall?.copyWith(
+                                          color: priorityColor,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
                               ),
                             ),
-                          Text(
-                            "Priorité : $priorityLabel",
-                            style: TextStyle(color: priorityColor),
-                          ),
-                        ],
-                      ),
-                      leading: Checkbox(
-                        value: done,
-                        onChanged: (_) => _toggleDone(doc.id, done),
-                      ),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: () => _delete(doc.id),
+
+                            // Bouton delete
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline),
+                              color: cs.error,
+                              onPressed: () => _delete(doc.id),
+                            ),
+                          ],
+                        ),
                       ),
                     );
-                  }).toList(),
+                  },
                 );
               },
             ),
